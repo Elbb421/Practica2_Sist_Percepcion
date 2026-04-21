@@ -42,7 +42,7 @@ def extraer_keypoints(pcd, voxel_size):
 
 def calcular_descriptores(pcd, keypoints, voxel_size):
     radius_normal = voxel_size * 2
-    pcd.estimate_normals(
+    keypoints.estimate_normals(
         o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30)
     )
 
