@@ -40,18 +40,20 @@ def extraer_keypoints(pcd, voxel_size):
         gamma_32=0.975
     )
 
-def calcular_descriptores(pcd, keypoints, voxel_size):
+def calcular_descriptores(pcd, voxel_size):
     radius_normal = voxel_size * 2
-    keypoints.estimate_normals(
+    pcd.estimate_normals(
         o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30)
     )
 
     radius_feature = voxel_size * 5
     return o3d.pipelines.registration.compute_fpfh_feature(
-        keypoints,
+        pcd,
         o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100)
     )
 
+# desc_obj = FPFH del objeto filtrado
+# desc_sce = FPFH de la escena filtrada
 def encontrar_correspondencias(desc_obj, desc_sce):
     matcher = o3d.geometry.KDTreeFlann(desc_sce)
     correspondencias = []
@@ -70,7 +72,7 @@ escena = o3d.io.read_point_cloud("snap_0point.pcd")
 escena_limpia = limpiar_escena(escena)
 escena_filtro = escena_limpia.voxel_down_sample(voxel_size)
 kp_escena = extraer_keypoints(escena_filtro, voxel_size)
-desc_escena = calcular_descriptores(escena_filtro, kp_escena, voxel_size)
+desc_escena = calcular_descriptores(escena_filtro, voxel_size)
 
 print(f"Keypoints escena: {len(kp_escena.points)}")
 
@@ -87,7 +89,7 @@ for nombre in nombres_objetos:
     obj = o3d.io.read_point_cloud(nombre)
     obj_f = obj.voxel_down_sample(voxel_size)
     kp = extraer_keypoints(obj_f, voxel_size)
-    desc = calcular_descriptores(obj_f, kp, voxel_size)
+    desc = calcular_descriptores(obj_f, voxel_size)
     matches = encontrar_correspondencias(desc, desc_escena)
 
     objetos.append(obj_f)
