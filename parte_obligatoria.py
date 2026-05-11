@@ -1,7 +1,7 @@
 import open3d as o3d
 import numpy as np
 
-voxel_size = 0.005
+voxel_size = 0.008
 
 nombres_objetos = [
     "s0_mug_corr.pcd",
@@ -20,14 +20,33 @@ colores_objetos = [
 # ============================================================
 # 1. Limpieza de escena
 # ============================================================
+# Modificación : varias iteraciones
 
-def limpiar_escena(pcd):
-    plane_model, inliers = pcd.segment_plane(
-        distance_threshold=0.01,
-        ransac_n=3,
-        num_iterations=1000
-    )
-    return pcd.select_by_index(inliers, invert=True)
+def limpiar_escena(pcd, threshold=0.03, min_points=5000, max_iter=3):
+    """
+    Elimina múltiples planos dominantes de la escena.
+    threshold: distancia para RANSAC
+    min_points: tamaño mínimo para considerar un plano dominante
+    max_iter: número máximo de planos a eliminar
+    """
+    pcd_clean = pcd
+
+    for i in range(max_iter):
+        plane_model, inliers = pcd_clean.segment_plane(
+            distance_threshold=threshold,
+            ransac_n=3,
+            num_iterations=2000
+        )
+
+        if len(inliers) < min_points:
+            print(f"No se detectan más planos grandes (iteración {i}).")
+            break
+
+        print(f"Plano {i+1} eliminado: {len(inliers)} puntos")
+        pcd_clean = pcd_clean.select_by_index(inliers, invert=True)
+
+    return pcd_clean
+
 
 # ============================================================
 # 2. Downsample
