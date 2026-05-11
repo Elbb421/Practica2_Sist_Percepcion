@@ -1,5 +1,5 @@
 """
-practica2_completa.py
+practica2_completa.py  
 =====================================================================
 
 Pasos:
