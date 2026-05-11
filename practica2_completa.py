@@ -25,12 +25,10 @@ import copy
 import time
 
 # =====================================================================
-#  CONFIGURACIÓN — CAMBIA ESTO PARA TUS PCDs
+#  CONFIGURACIÓN PCDs
 # =====================================================================
 
-# --- Rutas a tus archivos ---
-# Rutas relativas (si están en la misma carpeta que el script)
-# o absolutas (ej: "/home/usuario/practica2/datos/snap_0point.pcd")
+# --- Rutas a los archivos ---
 RUTA_ESCENA = "snap_0point.pcd"
 
 RUTAS_OBJETOS = [
@@ -63,7 +61,7 @@ COLORES_OBJETOS = [
 #   3. Ejemplo: si la escena mide 2m x 1.5m x 0.8m → menor=0.8
 #      → voxel_size = 0.8/200 = 0.004 → usa 0.004 o 0.005
 #   4. Si voxel_size > 0.009 y no se pueden calcular normales,
-#      bájalo un poco
+#      se baja un poco
 # =====================================================================
 
 voxel_size = 0.003  # <-- CAMBIA ESTO según tu escena
@@ -333,7 +331,7 @@ def calcular_fpfh(pcd, normal_r, fpfh_r, etiqueta=""):
     )
     
     # Orientar normales consistentemente
-    # Descomenta y ajusta si sabes dónde estaba la cámara:
+    # Descomentar y ajustar si se conoce dónde está la cámara:
     # pcd.orient_normals_towards_camera_location(
     #     camera_location=np.array([0.0, 0.0, 0.0])
     # )
@@ -356,11 +354,11 @@ def calcular_fpfh(pcd, normal_r, fpfh_r, etiqueta=""):
 
 def encontrar_correspondencias(desc_obj, desc_sce, ratio_thresh=0.9):
     """
-    Empareja descriptores del objeto con los de la escena.
+    Emparejar descriptores del objeto con los de la escena.
     
-    Usa KDTree para búsqueda eficiente + ratio test de Lowe:
-    - Para cada descriptor del objeto, busca los 2 más cercanos en escena
-    - Solo acepta si dist(mejor) < ratio_thresh × dist(segundo_mejor)
+    Usar KDTree para búsqueda eficiente + ratio test de Lowe:
+    - Para cada descriptor del objeto, buscar los 2 más cercanos en escena
+    - Solo aceptar si dist(mejor) < ratio_thresh × dist(segundo_mejor)
     
     ¿Por qué el ratio test?
     Si el mejor match está muy cerca del segundo mejor, significa que
@@ -411,7 +409,7 @@ def registro_global_ransac(source, target, source_fpfh, target_fpfh,
     3. Se queda con la transformación que tenga más inliers
     4. Los inliers son pares cuya distancia post-transformación < max_distance
     
-    ¿Por qué necesitamos mínimo 3 correspondencias?
+    ¿Por qué se necesita mínimo 3 correspondencias?
     - Transformación rígida 3D = 6 grados de libertad (3 rot + 3 trasl)
     - Cada par da 3 ecuaciones → 2 pares = 6 ecuaciones (justo)
     - Pero 2 pares pueden ser degenerados (4 puntos coplanares)
@@ -526,8 +524,8 @@ def procesar_objeto(nombre, ruta_obj, color, escena_down, desc_escena,
     Pipeline completo para detectar un objeto en la escena.
     
     Estrategia:
-    - Primero intenta FPFH sobre ISS keypoints (requerido por la práctica)
-    - Si hay pocos matches, recurre a FPFH sobre nube completa downsampled
+    - Primero intentar FPFH sobre ISS keypoints
+    - Si hay pocos matches, recurrir a FPFH sobre nube completa downsampled
     """
     print("\n" + "=" * 65)
     print(f"  PROCESANDO: {nombre} ({ruta_obj})")
