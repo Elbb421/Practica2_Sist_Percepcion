@@ -291,6 +291,7 @@ def extraer_keypoints_con_fallback(pcd, etiqueta=""):
         non_max_radius=iss_non_max_radius * 2,
         gamma_21=0.9,
         gamma_32=0.9,
+        
         etiqueta=f"{etiqueta} (muy relajado)"
     )
     
@@ -549,10 +550,6 @@ def procesar_objeto(nombre, ruta_obj, color, escena_down, desc_escena,
     print(f"\n  [Paso 2] Voxel Downsampling")
     obj_down = hacer_downsample(obj, voxel_size)
     
-    if len(obj_down.points) < 10:
-        print(f"  ✗ Muy pocos puntos tras downsample ({len(obj_down.points)})")
-        print(f"    → Prueba reducir voxel_size")
-        return resultado
     
     # ── PASO 3: ISS Keypoints ──
     print(f"\n  [Paso 3] ISS Keypoints")
