@@ -1,7 +1,4 @@
 """
-practica2_completa.py  
-=====================================================================
-
 Pasos:
 1. Eliminar planos dominantes (3 iteraciones de RANSAC plano)
 2. Voxel Downsampling
@@ -12,9 +9,9 @@ Pasos:
 7. Refinamiento ICP
 
 Estrategia de FPFH:
-- Se intenta FPFH sobre ISS keypoints primero (requerido por la práctica)
+- Se intenta FPFH sobre ISS keypoints primero 
 - Si hay pocos matches (< 3), se recurre a FPFH sobre la nube completa
-  downsampled (más robusto)
+  downsampled 
 
 =====================================================================
 """
@@ -24,11 +21,9 @@ import numpy as np
 import copy
 import time
 
-# =====================================================================
-#  CONFIGURACIÓN PCDs
-# =====================================================================
 
-# --- Rutas a los archivos ---
+#  CONFIGURACIÓN PCDs
+# Rutas a los archivos 
 RUTA_ESCENA = "snap_0point.pcd"
 
 RUTAS_OBJETOS = [
@@ -51,51 +46,41 @@ COLORES_OBJETOS = [
 # =====================================================================
 #  PARÁMETROS DEL PIPELINE
 # =====================================================================
+# Todos los radios son múltiplos de voxel_size. 
+# Si se cambia voxel_size, todo se ajusta automáticamente.
 #
-# REGLA MAESTRA: Todos los radios se expresan como múltiplos de
-# voxel_size. Si cambias voxel_size, todo se ajusta automáticamente.
-#
-# CÓMO ELEGIR voxel_size:
-#   1. Carga tu escena y mira las dimensiones que imprime
-#   2. voxel_size ≈ dimensión_menor / 200 a 400
-#   3. Ejemplo: si la escena mide 2m x 1.5m x 0.8m → menor=0.8
-#      → voxel_size = 0.8/200 = 0.004 → usa 0.004 o 0.005
-#   4. Si voxel_size > 0.009 y no se pueden calcular normales,
-#      se baja un poco
+# voxel_size:
+# voxel_size > 0.009, no se pueden calcular normales,se baja.
+# voxel_size muy pequeño, no hay descriptores suficientes
 # =====================================================================
 
-voxel_size = 0.003  # <-- CAMBIA ESTO según tu escena
+voxel_size = 0.003
 
-# ---- Segmentación de planos (RANSAC) ----
-# Número de planos dominantes a eliminar (suelo, pared, mesa...)
+# Segmentación de planos (RANSAC) 
+# Número de planos dominantes a eliminar : 2 paredes y 1 mesa
 NUM_PLANOS_ELIMINAR = 3
 
 # distance_threshold: umbral de distancia al plano para ser inlier
-# - Si no se elimina bien el suelo → subir a 0.015 o 0.02
-# - Si se borra parte de los objetos → bajar a 0.005 o 0.003
+# Si no se elimina bien plano → se sube a 0.015 o 0.02
+# Si se borra parte de los objetos → se baja a 0.005 o 0.003
 plane_distance_threshold = 0.01
-
 plane_num_iterations = 1000
 
-# ---- ISS Keypoints ----
-# gamma_21 y gamma_32 controlan la selectividad:
+# ISS Keypoints 
 #   gamma BAJO (0.3-0.5) → MÁS selectivo → MENOS keypoints (esquinas fuertes)
 #   gamma ALTO (0.8-0.9) → MENOS selectivo → MÁS keypoints (cualquier punto)
-# ⚠ DIRECCIÓN CONTRAINTUITIVA: la condición es ratio < gamma
-#   gamma=0.5 → solo acepta ratios < 0.5 → pocos puntos pasan
-#   gamma=0.9 → acepta casi cualquier ratio → casi todos pasan
 iss_gamma_21 = 0.5
 iss_gamma_32 = 0.5
 
-# Radios ISS (múltiplos de voxel_size)
-# salient_radius: radio para la matriz de dispersión → contexto amplio
-# non_max_radius: radio para supresión de no-máximos → separación entre KP
+# Radios ISS 
+# salient_radius: radio para la matriz de dispersión, contexto amplio
+# non_max_radius: radio para supresión de no-máximos, separación entre KP
 iss_salient_radius = 10 * voxel_size   # 0.05
 iss_non_max_radius  = 5  * voxel_size   # 0.025
 
-# ---- Normales y FPFH ----
+# Normales y FPFH 
 normal_radius = 4 * voxel_size   # Radio para estimar normales (≥ voxel_size)
-fpfh_radius   = 8 * voxel_size   # Radio para FPFH (el MÁS CRÍTICO)
+fpfh_radius   = 8 * voxel_size   # Radio para FPFH, MÁS CRÍTICO
 
 # Ratio test de Lowe para correspondencias
 # 0.7: muy estricto (pocos matches, muy fiables)
@@ -103,55 +88,49 @@ fpfh_radius   = 8 * voxel_size   # Radio para FPFH (el MÁS CRÍTICO)
 # 0.9: permisivo (más matches, algunos erróneos)
 ratio_threshold = 0.95
 
-# ---- RANSAC Registration (paso 6) ----
+# RANSAC Registration 
 # max_correspondence_distance: distancia máxima para considerar un par
 # como inlier en RANSAC. Debe ser generoso para converger.
 # - Demasiado pequeño → RANSAC no encuentra transformación
-# - Demasiado grande → transformación errónea
-# Regla: 3-5 veces voxel_size
-ransac_max_distance = 8 * voxel_size  # 0.021m (era 5×=0.025)
+# - Demasiado grande → transformación errónea con 8 tmb va bien
+# 3-5 veces voxel_size
+ransac_max_distance = 5 * voxel_size 
 
 # ransac_n: número mínimo de correspondencias para estimar transformación
-# 3 es el mínimo absoluto para transformación rígida 3D (6 DOF)
-# 4 es más robusto (recomendado)
+# 3: mínimo absoluto para transformación rígida 3D (6 DOF)
+# 4 más robusto
 ransac_n = 4
 
 # Número máximo de iteraciones de RANSAC
 # Más iteraciones → más probabilidad de encontrar la transformación correcta
-# pero más lento. 100000 suele ser suficiente.
+# pero más lento. 100 000 
 ransac_max_iterations = 100000
 ransac_confidence = 500  # Número de validaciones
 
-# ---- ICP (paso 7) ----
+# ICP 
 # max_correspondence_distance: distancia máxima para correspondencias ICP
 # Debe ser MÁS PEQUEÑO que RANSAC (refinamiento fino)
-# Regla: 0.5-1.5 veces voxel_size
-icp_max_distance = voxel_size * 5  # 0.015m (era 1.5×=0.0045)
+# 0.5-1.5 veces voxel_size funciona pero con 5 tmb
+icp_max_distance = voxel_size * 1.5  # 0.0045
 
 # Número máximo de iteraciones ICP
 icp_max_iterations = 50
 
 
-# =====================================================================
-#  FUNCIÓN 1: Eliminar planos dominantes (múltiples iteraciones)
-# =====================================================================
+# 1: Eliminar planos dominantes 
 
 def eliminar_planos(pcd, num_planos=3, distance_threshold=0.01,
                     num_iterations=1000):
     """
     Elimina múltiples planos dominantes iterativamente.
-    
     Cada iteración:
     1. Encuentra el plano con más inliers (RANSAC)
+    inliers son los puntos que pertenecen al plano detectado.
     2. Elimina los puntos del plano
     3. Repite con la nube restante
-    
-    ¿Por qué múltiples planos?
-    - En escenas indoor típicamente hay suelo (plano 1),
-      mesa (plano 2) y pared (plano 3)
-    - Si solo eliminamos 1, los otros interfieren con el matching
+
     """
-    pcd_actual = pcd
+    pcd_actual = pcd # escena que se va limpiando
     planos_encontrados = 0
     
     for i in range(num_planos):
@@ -185,9 +164,7 @@ def eliminar_planos(pcd, num_planos=3, distance_threshold=0.01,
     return pcd_actual
 
 
-# =====================================================================
-#  FUNCIÓN 2: Voxel Downsampling
-# =====================================================================
+#  2 Voxel Downsampling
 
 def hacer_downsample(pcd, vs):
     """
@@ -206,11 +183,7 @@ def hacer_downsample(pcd, vs):
     print(f"  Downsample (voxel={vs:.4f}m): {n_orig} → {n_down} puntos ({pct:.1f}% reducción)")
     return pcd_down
 
-
-# =====================================================================
-#  FUNCIÓN 3: ISS Keypoints (con fallback)
-# =====================================================================
-
+#  3: ISS Keypoints (con fallback)
 def extraer_keypoints_iss(pcd, salient_radius, non_max_radius,
                           gamma_21, gamma_32, etiqueta=""):
     """
@@ -248,16 +221,6 @@ def extraer_keypoints_iss(pcd, salient_radius, non_max_radius,
 
 
 def extraer_keypoints_con_fallback(pcd, etiqueta=""):
-    """
-    Intenta ISS con parámetros estándar.
-    Si obtiene 0 keypoints, reintenta con parámetros relajados
-    (gamma más alto = menos selectivo).
-    
-    ¿Por qué puede fallar ISS?
-    - Objetos muy pequeños (< 300 puntos tras downsample)
-    - Superficies muy suaves sin esquinas marcadas
-    - Radio de vecindad inadecuado para la escala del objeto
-    """
     # Intento 1: parámetros estándar
     kp = extraer_keypoints_iss(
         pcd,
@@ -271,7 +234,7 @@ def extraer_keypoints_con_fallback(pcd, etiqueta=""):
         return kp
     
     # Intento 2: gamma relajado
-    print(f"    ⚠ 0 keypoints → reintentando con gamma relajado (0.75)...")
+    print(f"    0 keypoints → reintentando con gamma relajado (0.75)...")
     kp = extraer_keypoints_iss(
         pcd,
         salient_radius=15 * voxel_size,
@@ -284,7 +247,7 @@ def extraer_keypoints_con_fallback(pcd, etiqueta=""):
         return kp
     
     # Intento 3: muy relajado
-    print(f"    ⚠ Todavía 0 → último intento (gamma=0.9, radio mayor)...")
+    print(f"    Todavía 0 → último intento (gamma=0.9, radio mayor)...")
     kp = extraer_keypoints_iss(
         pcd,
         salient_radius=20 * voxel_size,
@@ -296,7 +259,6 @@ def extraer_keypoints_con_fallback(pcd, etiqueta=""):
     )
     
     if len(kp.points) == 0:
-        print(f"    ✗ ISS no encontró keypoints para {etiqueta}")
         print(f"      Se usará FPFH sobre nube completa como fallback")
     
     return kp
@@ -317,7 +279,7 @@ def calcular_fpfh(pcd, normal_r, fpfh_r, etiqueta=""):
     3. FPFH = SPFH(p) + Σ w_i · SPFH(vecino_i)
        ponderado por distancia inversa
     
-    ⚠ IMPORTANTE: Normales deben apuntar en dirección consistente.
+    IMPORTANTE: Normales deben apuntar en dirección consistente.
     Si las normales del objeto y la escena apuntan en direcciones
     opuestas, los descriptores serán completamente diferentes
     → 0 matches → pipeline falla.
@@ -330,12 +292,6 @@ def calcular_fpfh(pcd, normal_r, fpfh_r, etiqueta=""):
             radius=normal_r, max_nn=30
         )
     )
-    
-    # Orientar normales consistentemente
-    # Descomentar y ajustar si se conoce dónde está la cámara:
-    # pcd.orient_normals_towards_camera_location(
-    #     camera_location=np.array([0.0, 0.0, 0.0])
-    # )
     
     # Calcular FPFH
     fpfh = o3d.pipelines.registration.compute_fpfh_feature(
@@ -367,11 +323,11 @@ def encontrar_correspondencias(desc_obj, desc_sce, ratio_thresh=0.9):
     Esos matches probablemente son erróneos y deben descartarse.
     
     Ejemplo:
-      Caso bueno: dist1=0.1, dist2=0.8 → ratio=0.125 < 0.9 → ACEPTAR ✓
+      Caso bueno: dist1=0.1, dist2=0.8 → ratio=0.125 < 0.9 → ACEPTAR 
       Caso dudoso: dist1=0.3, dist2=0.35 → ratio=0.86 < 0.9 → ACEPTAR (dudoso)
-      Caso malo: dist1=0.3, dist2=0.31 → ratio=0.97 > 0.9 → RECHAZAR ✓
+      Caso malo: dist1=0.3, dist2=0.31 → ratio=0.97 > 0.9 → RECHAZAR 
     """
-    matcher = o3d.geometry.KDTreeFlann(desc_sce)
+    matcher = o3d.geometry.KDTreeFlann(desc_sce) # permite buscar vecinos más cercanos de forma muy rápida.
     correspondencias = []
     
     for i in range(desc_obj.data.shape[1]):
@@ -504,7 +460,7 @@ def refinamiento_icp(source, target, init_transform, max_distance,
         source, target,
         max_correspondence_distance=max_distance,
         init=init_transform,
-        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPlane(),
         criteria=o3d.pipelines.registration.ICPConvergenceCriteria(
             max_iteration=max_iterations
         )
@@ -588,12 +544,12 @@ def procesar_objeto(nombre, ruta_obj, color, escena_down, desc_escena,
                                             ratio_threshold)
         print(f"  Matches (KP): {len(matches)}")
         
-        if len(matches) >= 50:
+        if len(matches) >= 40:
             source_for_ransac = kp_obj
             source_fpfh = fpfh_obj_kp
             print(f"  ✓ Suficientes matches con keypoints")
     
-    if len(matches) < 50:
+    if len(matches) < 40:
         # Intento B: FPFH sobre nube completa downsampled
         print(f"\n  [Paso 4b] FPFH sobre nube completa downsampled")
         fpfh_obj_full = calcular_fpfh(obj_down, normal_radius, fpfh_radius,

@@ -62,10 +62,10 @@ def hacer_downsample(pcd, voxel_size):
 def extraer_keypoints(pcd, voxel_size):
     keypoints = o3d.geometry.keypoint.compute_iss_keypoints(
         pcd,
-        salient_radius=5 * voxel_size,
+        salient_radius=10 * voxel_size,
         non_max_radius=5 * voxel_size,
-        gamma_21=0.5,
-        gamma_32=0.5
+        gamma_21=0.975,
+        gamma_32=0.975
     )
     return keypoints
 
